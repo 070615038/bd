@@ -48,7 +48,9 @@ public class RestHandler {
 
     public RestHandler(ConnectController connectController) {
         this.connectController = connectController;
-        Javalin app = Javalin.start(connectController.getConnectConfig().getHttpPort());
+        Javalin app = Javalin.create();
+        app.enableCaseSensitiveUrls();
+        app = app.start(connectController.getConnectConfig().getHttpPort());
         app.get("/connectors/stopAll", this::handleStopAllConnector);
         app.get("/connectors/pauseAll", this::handlePauseAllConnector);
         app.get("/connectors/resumeAll", this::handleResumeAllConnector);
@@ -69,24 +71,16 @@ public class RestHandler {
         app.get("/plugin/reload", this::reloadPlugins);
     }
 
-    /**
-     * We need to refactor this method to use json output format
-     * @param context
-     */
+
     private void getAllocatedConnectors(Context context) {
 
         Set<WorkerConnector> workerConnectors = connectController.getWorker().getWorkingConnectors();
         Set<Runnable> workerTasks = connectController.getWorker().getWorkingTasks();
-        StringBuilder sb = new StringBuilder();
-        sb.append("working connectors:\n");
+        Map<String, ConnectKeyValue> connectors = new HashMap<>();
         for (WorkerConnector workerConnector : workerConnectors) {
-            sb.append(workerConnector.toString() + "\n");
+            connectors.put(workerConnector.getConnectorName(), workerConnector.getKeyValue());
         }
-        sb.append("working tasks:\n");
-        for (Runnable runnable : workerTasks) {
-            sb.append(runnable.toString() + "\n");
-        }
-        context.result(sb.toString());
+        context.result(JSON.toJSONString(connectors));
     }
 
 
@@ -129,8 +123,8 @@ public class RestHandler {
     }
 
     private void handleCreateConnector(Context context) {
-        String connectorName = context.param("connectorName");
-        String arg = context.queryParam("config");
+        String connectorName = context.pathParam("connectorName");
+        String arg = context.req.getParameter("config");
         if (arg == null) {
             context.result("failed! query param 'config' is required ");
             return;
@@ -157,7 +151,7 @@ public class RestHandler {
 
     private void handleQueryConnectorConfig(Context context) {
 
-        String connectorName = context.param("connectorName");
+        String connectorName = context.pathParam("connectorName");
 
         Map<String, ConnectKeyValue> connectorConfigs = connectController.getConfigManagementService().getConnectorConfigs();
         Map<String, List<ConnectKeyValue>> taskConfigs = connectController.getConfigManagementService().getTaskConfigs();
@@ -172,7 +166,7 @@ public class RestHandler {
 
     private void handleQueryConnectorStatus(Context context) {
 
-        String connectorName = context.param("connectorName");
+        String connectorName = context.pathParam("connectorName");
         Map<String, ConnectKeyValue> connectorConfigs = connectController.getConfigManagementService().getConnectorConfigs();
 
         if (connectorConfigs.containsKey(connectorName)) {
@@ -183,7 +177,7 @@ public class RestHandler {
     }
 
     private void handleStopConnector(Context context) {
-        String connectorName = context.param("connectorName");
+        String connectorName = context.pathParam("connectorName");
         try {
 
             connectController.getConfigManagementService().removeConnectorConfig(connectorName);
